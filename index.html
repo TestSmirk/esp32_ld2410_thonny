@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LD2410C 实时雷达数据</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --text-color: #e2e8f0;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --accent-gray: #64748b;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .dashboard {
+            width: 100%;
+            max-width: 900px;
+            display: grid;
+            gap: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-weight: 600;
+            letter-spacing: 1px;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+
+        .status-0 {
+            background: rgba(100, 116, 139, 0.2);
+            color: var(--accent-gray);
+            border: 1px solid var(--accent-gray);
+        }
+
+        .status-1 {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        }
+
+        .status-2 {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .status-3 {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .metric-label {
+            color: #cbd5e1;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            font-family: monospace;
+        }
+
+        .bars-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 120px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .bar-col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            height: 100%;
+        }
+
+        .bar {
+            width: 100%;
+            background: var(--accent-green);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.3s ease;
+            min-height: 2px;
+        }
+
+        .bar.static {
+            background: var(--accent-blue);
+        }
+
+        .bar-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        .connection-panel {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #334155;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .status-dot.connected {
+            background: #10b981;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app" class="dashboard">
+        <div class="header">
+            <h1>LD2410C 毫米波雷达</h1>
+
+            <div class="connection-panel">
+                <div class="status-dot" :class="{ 'connected': isConnected }"></div>
+                <span>{{ isConnected ? '已连接' : '未连接' }}</span>
+                <input type="text" v-model="wsUrl" placeholder="ws://192.168.x.x:8080" :disabled="isConnected" />
+                <button @click="connectWs" v-if="!isConnected">连接 WebSocket</button>
+                <button @click="disconnectWs" v-else>断开</button>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- 状态卡片 -->
+            <div class="card"
+                style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <div class="card-title">当前目标状态</div>
+                <div class="status-badge" :class="'status-' + radarData.target_status">
+                    {{ statusText }}
+                </div>
+            </div>
+
+            <!-- 其他信息 -->
+            <div class="card">
+                <div class="card-title">基础检测信息</div>
+                <div class="metric">
+                    <span class="metric-label">光敏检测值 (0-255)</span>
+                    <span class="metric-value" style="color: #f59e0b;">{{ radarData.light }}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">OUT 引脚状态</span>
+                    <span class="metric-value">{{ radarData.out_state ? '有人' : '无人' }}</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">最大探测距离</span>
+                    <span class="metric-value">{{ radarData.detect_distance }} <span
+                            style="font-size: 1rem">cm</span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <!-- 运动目标 -->
+            <div class="card">
+                <div class="card-title">运动目标 (动态)</div>
+                <div class="metric">
+                    <span class="metric-label">距离</span>
+                    <span class="metric-value" style="color: var(--accent-green)">{{ radarData.moving_distance }} <span
+                            style="font-size: 1rem">cm</span></span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">能量值</span>
+                    <span class="metric-value">{{ radarData.moving_energy }}</span>
+                </div>
+
+                <div class="card-title" style="margin-top: 20px; font-size: 0.9rem;">工程模式 - 动能距离门 (0-8)</div>
+                <div class="bars-container">
+                    <div class="bar-col" v-for="(energy, index) in radarData.moving_gates" :key="'m'+index">
+                        <div class="bar" :style="{ height: Math.min((energy / 100) * 100, 100) + '%' }"></div>
+                        <div class="bar-label">{{ index }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 静止目标 -->
+            <div class="card">
+                <div class="card-title">静止目标 (微动)</div>
+                <div class="metric">
+                    <span class="metric-label">距离</span>
+                    <span class="metric-value" style="color: var(--accent-blue)">{{ radarData.static_distance }} <span
+                            style="font-size: 1rem">cm</span></span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">能量值</span>
+                    <span class="metric-value">{{ radarData.static_energy }}</span>
+                </div>
+
+                <div class="card-title" style="margin-top: 20px; font-size: 0.9rem;">工程模式 - 静态距离门 (0-8)</div>
+                <div class="bars-container">
+                    <div class="bar-col" v-for="(energy, index) in radarData.static_gates" :key="'s'+index">
+                        <div class="bar static" :style="{ height: Math.min((energy / 100) * 100, 100) + '%' }"></div>
+                        <div class="bar-label">{{ index }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onUnmounted, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const isConnected = ref(false);
+                const wsUrl = ref('host'); // 替换为ESP32的IP
+                let ws = null;
+
+                // 默认空数据
+                const radarData = ref({
+                    target_status: 0,
+                    moving_distance: 0,
+                    moving_energy: 0,
+                    static_distance: 0,
+                    static_energy: 0,
+                    detect_distance: 0,
+                    light: 0,
+                    out_state: 0,
+                    moving_gates: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    static_gates: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                });
+
+                const statusText = computed(() => {
+                    const statusMap = {
+                        0: '环境无人 (0x00)',
+                        1: '发现运动目标 (0x01)',
+                        2: '发现静止目标 (0x02)',
+                        3: '运动 & 静止目标 (0x03)'
+                    };
+                    return statusMap[radarData.value.target_status] || '未知状态';
+                });
+
+                const connectWs = () => {
+                    if (ws) ws.close();
+                    try {
+                        ws = new WebSocket(wsUrl.value);
+
+                        ws.onopen = () => {
+                            isConnected.value = true;
+                        };
+
+                        ws.onmessage = (event) => {
+                            try {
+                                const data = JSON.parse(event.data);
+                                Object.assign(radarData.value, data);
+                            } catch (e) {
+                                console.error('JSON解析失败', e);
+                            }
+                        };
+
+                        ws.onclose = () => {
+                            isConnected.value = false;
+                        };
+
+                        ws.onerror = (err) => {
+                            console.error('WebSocket Error', err);
+                            isConnected.value = false;
+                            ws.close();
+                        };
+                    } catch (e) {
+                        alert('连接异常: ' + e.message);
+                    }
+                };
+                onMounted(() => {
+                    connectWs();
+                });
+                const disconnectWs = () => {
+                    if (ws) {
+                        ws.close();
+                        ws = null;
+                        isConnected.value = false;
+                    }
+                };
+
+                onUnmounted(() => {
+                    disconnectWs();
+                });
+
+                // 为了演示没有连接的时候 UI怎么显示，先造点假数据随机动一下
+                /* // 取消这段注释可以看到测试动画
+                setInterval(() => {
+                    if(!isConnected.value) {
+                         radarData.value.moving_gates = radarData.value.moving_gates.map(v => Math.floor(Math.random() * 80));
+                         radarData.value.static_gates = radarData.value.static_gates.map(v => Math.floor(Math.random() * 80));
+                    }
+                }, 500); 
+                */
+
+                return {
+                    isConnected,
+                    wsUrl,
+                    radarData,
+                    statusText,
+                    connectWs,
+                    disconnectWs
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
